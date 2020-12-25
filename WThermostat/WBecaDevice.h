@@ -1872,12 +1872,15 @@ private:
     }
 
     void onChangeTargetTemperature(WProperty* property) {
-		network->log()->trace(PSTR("Got new targetTemperature"));
+		network->log()->trace(PSTR("BEN:::Got new targetTemperature"));
 		bool force=false;
 		if (schedulesMode->equalsString(SCHEDULES_MODE_AUTO)){
 			network->log()->trace(PSTR("Got new targetTemperature: Switching from Schdule to Manual"));
 			schedulesMode->setSuppressOnChange();
 			schedulesMode->setString(SCHEDULES_MODE_OFF);
+            network->log()->trace(PSTR("Forcing heat mode...."));
+            unsigned char deviceOnCommand[] = { 0x55, 0xAA, 0x00, 0x06, 0x00, 0x05, 0x04, 0x04, 0x00, 0x01, 0x01};
+            commandCharsToSerial(11, deviceOnCommand);
 			force=true;
 		}
 		if (schedulesMode->equalsString(SCHEDULES_MODE_OFF)){
