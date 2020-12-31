@@ -207,6 +207,8 @@ const char* PROP_BECARES7 PROGMEM = "becares7";
 const char* PROP_BECARES8 PROGMEM = "becares8";
 const char* PROP_SWITCHBACKTOAUTO PROGMEM = "switchBackToAuto";
 const char* TITL_SWITCHBACKTOAUTO PROGMEM = "switch Back from Manual to Auto at next Schedule";
+const char* PROP_SWITCHBACKFROMOFF PROGMEM = "switchBackFromOff";
+const char* TITL_SWITCHBACKFROMOFF PROGMEM = "switch back from Off mode to On mode at next Schedule";
 const char* PROP_FLOORSENSOR PROGMEM = "floorSensor";
 const char* PROP_PRECISION PROGMEM = "precision";
 const char* PROP_ACTUALTEMPERATURE PROGMEM = "temperature";
@@ -259,6 +261,7 @@ const byte BECABITS1_TEMP_01        =   4;
 const byte BECABITS1_TEMP_10        =   8;
 const byte BECABITS1_SWITCHBACKOFF  =  16;
 const byte BECABITS1_FLOORSENSOR    =  32;
+const byte BECABITS1_SWITCHBACKMAN  =  64;
 
 const byte devicesWithHassAutodiscoverSupport[] = {
 	MODEL_BHT_002_GBLW,
@@ -360,6 +363,17 @@ public:
 		this->switchBackToAuto->setOnChange(std::bind(&WBecaDevice::saveSettings, this, std::placeholders::_1));
 		this->addProperty(switchBackToAuto);
 		network->log()->trace(F("Beca settings switchBackToAuto done (%d)"), ESP.getMaxFreeBlockSize());
+
+		network->log()->trace(F("Beca settings switchBackToAuto (%d)"), ESP.getMaxFreeBlockSize());
+		// switch back property
+		this->switchBackFromOff = new WProperty(PROP_SWITCHBACKFROMOFF, TITL_SWITCHBACKFROMOFF, BOOLEAN);
+		this->switchBackFromOff->setBoolean(!(this->becaBits1->getByte() & BECABITS1_SWITCHBACKMAN));
+		this->switchBackFromOff->setVisibility(ALL);
+		this->switchBackFromOff->setReadOnly(false);
+		this->switchBackFromOff->setMqttSendChangedValues(true);
+		this->switchBackFromOff->setOnChange(std::bind(&WBecaDevice::saveSettings, this, std::placeholders::_1));
+		this->addProperty(switchBackFromOff);
+		network->log()->trace(F("Beca settings switchBackFromOff done (%d)"), ESP.getMaxFreeBlockSize());
 
 		// Floor Sensor 
 		this->floorSensor = new WProperty(PROP_FLOORSENSOR, nullptr, BOOLEAN);
@@ -651,6 +665,10 @@ public:
 		// Switch back from manual temo
 		page->printf_P(HTTP_CHECKBOX_OPTION, F("Switch back to Auto mode from manual at next schedule period change"),
 		"sb", "sb", (this->switchBackToAuto->getBoolean() ? HTTP_CHECKED : ""), "", F("Enabled"));
+        
+        // Switch back from off to on
+		page->printf_P(HTTP_CHECKBOX_OPTION, F("Switch back from OFF mode to ON at next schedule period change"),
+		"sm", "sm", (this->switchBackFromOff->getBoolean() ? HTTP_CHECKED : ""), "", F("Enabled"));
 
 		//ComboBox with weekday
     	byte dayOffset = getSchedulesDayOffset();
@@ -695,6 +713,7 @@ public:
 			// default 0.5
 		}
 		bb1 |= ((getValueOrEmpty(request, "sb") == HTTP_TRUE) ? 0 : BECABITS1_SWITCHBACKOFF); //logic reversed!
+        bb1 |= ((getValueOrEmpty(request, "sm") == HTTP_TRUE) ? 0 : BECABITS1_SWITCHBACKMAN); //logic reversed!
 		bb1 |= ((getValueOrEmpty(request, "fs") == HTTP_TRUE) ? BECABITS1_FLOORSENSOR : 0);
 		this->becaBits1->setByte(bb1);
 		this->becaBits2->setByte(bb2); // meets r2d2
@@ -1437,6 +1456,7 @@ private:
 	WProperty *deadzoneTemp;
 	WProperty *temperaturePrecision;
 	WProperty *switchBackToAuto;
+    WProperty *switchBackFromOff;
 	WProperty *floorSensor;
     WProperty* ntpServer;
     WProperty* schedulesDayOffset;
@@ -1860,6 +1880,10 @@ private:
 				(this->schedulesMode->equalsString(SCHEDULES_MODE_OFF))) {
 				network->log()->notice(PSTR("Changed automatically back to Schedule from Manual"));
 				this->schedulesMode->setString(SCHEDULES_MODE_AUTO);
+                if (this->switchBackFromOff->getBoolean()){
+                    this->deviceOn->setBoolean(true);
+                    network->log()->notice(PSTR("Changed automatically back to ON from OFF"));
+                }
 			}
 			if (this->currentSchedulePeriod!=newPeriod){
 				this->currentSchedulePeriod = newPeriod;
